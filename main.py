@@ -1,12 +1,12 @@
 import flask
 import flask_login
-from flask import Flask, render_template, request, url_for, redirect, flash, send_from_directory
+from flask import Flask, render_template, request, url_for, redirect, flash, send_from_directory, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin, login_user, LoginManager, login_required, current_user, logout_user
+from flask_login import UserMixin, login_user, LoginManager, login_required, current_user,\
+    logout_user, fresh_login_required
 
 app = Flask(__name__)
-
 app.config['SECRET_KEY'] = 'any-secret-key-you-choose'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -30,7 +30,9 @@ class User(UserMixin, db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.get(user_id)
+    print("this happens")
+    return User.query.get(user_id)
+
 
 @app.route('/')
 def home():
@@ -44,23 +46,44 @@ def register():
         user = User(email=request.form["email"], password=secure_password, name=request.form["name"])
         db.session.add(user)
         db.session.commit()
+        login_user(user)
         return redirect(url_for('secrets'))
     return render_template("register.html")
 
 
-@app.route('/login')
+@app.route('/login', methods=["POST", "GET"])
 def login():
+    if request.method == "POST":
+        email = request.form["email"]
+        password = request.form['password']
+        print(f"the password is {password}")
+        user = User.query.filter_by(email=email).first()
+
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect("/secrets")
+        else:
+            return "<h1>You don't have an email with this password in our database</h1>", 401
     return render_template("login.html")
 
 
+# @login_manager.unauthorized_handler
+# def unauthorized():
+#     print("Fuck you")
+#     return redirect("/")
+
+
+
 @app.route('/secrets')
+@login_required
 def secrets():
     return render_template("secrets.html")
 
 
 @app.route('/logout')
 def logout():
-    pass
+    logout_user()
+    return redirect("/")
 
 
 @app.route('/download')
